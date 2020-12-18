@@ -5,7 +5,7 @@ variable "subscription_id" {
 
 variable "tenant_id" {
     type = string
-    description = "Tenant_id"
+    description = "Tenant id"
 }
 
 variable "project_id" {
@@ -33,3 +33,7 @@ variable "admin_password" {
     description = "Password of the admin user"
 }
 
+variable "home_ip_address" {
+    type = string
+    description = "IP address which has RDP access to the server by default"
+}

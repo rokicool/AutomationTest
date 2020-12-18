@@ -10,91 +10,99 @@ resource "azurerm_resource_group" "rg-automation" {
   location = "EastUS2"
 }
 
-module "winserv" {
-  source              = "Azure/compute/azurerm"
+resource "azurerm_virtual_network" "def-network" {
+  name                = "vnet-${var.project_id}"
+  location            = azurerm_resource_group.rg-automation.location
   resource_group_name = azurerm_resource_group.rg-automation.name
-  is_windows_image    = true
-  vm_hostname         = "vm-${var.project_id}-win" // line can be removed if only one VM module per resource group
-  admin_password      = var.admin_password
-  admin_username      = var.admin_username
-  vm_size             = "Standard_B2s"
-  vm_os_simple        = "WindowsServer"
-  public_ip_dns       = ["ip-${var.project_id}-win"] // change to a unique name per datacenter region
-  vnet_subnet_id      = module.network.vnet_subnets[0]
+  address_space       = ["10.0.0.0/16"]
+  
 
-  depends_on = [azurerm_resource_group.rg-automation]
-}
-
-
-module "network-security-group" {
-  source                = "Azure/network-security-group/azurerm"
-  resource_group_name   = azurerm_resource_group.rg-automation.name
-  security_group_name   = "nsg-rg-automation"
-  source_address_prefix = ["0.0.0.0/0"]
-  predefined_rules = [
-    {
-      name     = "SSH"
-      priority = "500"
-    },
-    {
-      name     = "HTTP"
-      priority = "501"
-    },
-    {
-      name     = "HTTPS"
-      priority = "502"
-    }
-  ]
-
-  custom_rules = [
-    {
-      name                   = "allow-ssh-from-chi"
-      priority               = 201
-      direction              = "Inbound"
-      access                 = "Allow"
-      protocol               = "tcp"
-      source_port_range      = "*"
-      destination_port_range = "22"
-      source_address_prefix  = "76.229.200.36/32"
-      description            = "Allow SSH from Chicago appt"
-    },
-    {
-      name                    = "allow-rdp-from-chi"
-      priority                = 202
-      direction               = "Inbound"
-      access                  = "Allow"
-      protocol                = "tcp"
-      source_port_range       = "*"
-      destination_port_range  = "3389"
-      source_address_prefixes = ["76.229.200.36/32"]
-      description             = "Allow RDP from Chicago apt"
-    },
-  ]
-
-  tags = {
-    environment = var.environment
-    project_id  = var.project_id
+  subnet {
+    name           = "def-subnet0"
+    address_prefix = "10.0.1.0/24"
   }
 
-  depends_on = [azurerm_resource_group.rg-automation]
+   tags = {
+    environment = var.environment 
+    project_id  = var.project_id
+  }
 }
 
-module "network" {
-  source              = "Azure/network/azurerm"
+
+# Create Network Security Group to access Win VM 
+resource "azurerm_network_security_group" "nsg-win-vm" {
+  name                = "nsg-win-vm-${var.project_id}-${var.environment}"
+  location            = azurerm_resource_group.rg-automation.location
   resource_group_name = azurerm_resource_group.rg-automation.name
-  subnet_prefixes     = ["10.0.1.0/24"]
-  subnet_names        = ["subnet1"]
 
-  depends_on = [azurerm_resource_group.rg-automation]
+security_rule {
+    name                       = "allow-rdp-chicago-roki"
+    description                = "allow-rdp-chicago-roki"
+    priority                   = 101
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "3389"
+    source_address_prefix      =  var.home_ip_address
+    destination_address_prefix = "*" 
+  }
+
+security_rule {
+    name                       = "allow-http"
+    description                = "allow-http"
+    priority                   = 102
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "0.0.0.0/0"
+    destination_address_prefix = "*" 
+  }
+
+security_rule {
+    name                       = "allow-https"
+    description                = "allow-https"
+    priority                   = 103
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
+    source_address_prefix      = "0.0.0.0/0"
+    destination_address_prefix = "*" 
+  }
+
+
+  tags = {
+   # application = var.app_name
+    environment = var.environment 
+    project_id  = var.project_id
+  }
 }
 
 
 
-resource "azurerm_subnet_network_security_group_association" "roki-automation-nsg-assoc" {
-  subnet_id                 = module.network.vnet_subnets[0]
-  network_security_group_id = module.network-security-group.network_security_group_id
+# Web Server in Azure
+module "win-vm" {
+  source = "./win-vm"
+
+  vm_name     = "vm-win-${var.project_id}"
+  vm_rg_name  = azurerm_resource_group.rg-automation.name 
+  vm_location = azurerm_resource_group.rg-automation.location
+  vm_subnet_id= azurerm_virtual_network.def-network.subnet.*.id[0]
+  vm_storage_type = "StandardSSD_LRS"
+  environment = var.environment
+  vm_size     = "Standard_B2s"
+  project_id  = var.project_id
+  admin_username = var.admin_username
+  admin_password = var.admin_password
+  network_security_group_id = azurerm_network_security_group.nsg-win-vm.id
 }
 
-output "windows_vm_public_name" {
-  value = module.winserv.public_ip_dns_name
+
+# WEB VM Public IP
+output "win-vm-public_ip" {
+  value = module.win-vm.win_vm_public_ip
 }
