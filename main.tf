@@ -102,6 +102,33 @@ module "win-vm" {
 }
 
 
+/*
+
+Automation account 
+
+*/
+
+resource "azurerm_automation_account" "automation_account" {
+  name                = "aa-${var.project_id}"
+  location            = "EastUS"
+  resource_group_name = azurerm_resource_group.rg-automation.name
+
+  sku_name = "Basic"
+
+  tags = {
+    environment = var.environment
+    project_id  = var.project_id
+  }
+}
+
+resource "azurerm_log_analytics_workspace" "law" {
+  name                = "law-${var.project_id}"
+  location            = azurerm_resource_group.rg-automation.location
+  resource_group_name = azurerm_resource_group.rg-automation.name
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
+}
+
 # WEB VM Public IP
 output "win-vm-public_ip" {
   value = module.win-vm.win_vm_public_ip
