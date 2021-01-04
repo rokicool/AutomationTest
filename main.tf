@@ -94,13 +94,31 @@ module "win-vm" {
   vm_subnet_id= azurerm_virtual_network.def-network.subnet.*.id[0]
   vm_storage_type = "StandardSSD_LRS"
   environment = var.environment
-  vm_size     = "Standard_B2s"
+  vm_size     = "Standard_B1ms"
   project_id  = var.project_id
   admin_username = var.admin_username
   admin_password = var.admin_password
   network_security_group_id = azurerm_network_security_group.nsg-win-vm.id
 }
 
+
+
+# 2nd Web Server in Azure
+module "win-vm2" {
+  source = "./win-vm"
+
+  vm_name     = "vm-win2-${var.project_id}"
+  vm_rg_name  = azurerm_resource_group.rg-automation.name 
+  vm_location = azurerm_resource_group.rg-automation.location
+  vm_subnet_id= azurerm_virtual_network.def-network.subnet.*.id[0]
+  vm_storage_type = "StandardSSD_LRS"
+  environment = var.environment
+  vm_size     = "Standard_B1ms"
+  project_id  = var.project_id
+  admin_username = var.admin_username
+  admin_password = var.admin_password
+  network_security_group_id = azurerm_network_security_group.nsg-win-vm.id
+}
 
 /*
 
@@ -131,5 +149,10 @@ resource "azurerm_log_analytics_workspace" "law" {
 
 # WEB VM Public IP
 output "win-vm-public_ip" {
+  value = module.win-vm.win_vm_public_ip
+}
+
+# WEB2 VM Public IP
+output "win-vm2-public_ip" {
   value = module.win-vm.win_vm_public_ip
 }
